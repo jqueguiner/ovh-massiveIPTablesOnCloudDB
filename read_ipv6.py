@@ -5,7 +5,6 @@ import re
 import json
 import ovh
 import configparser
-import logging
 from pprint import pprint
 
 config = configparser.ConfigParser()
