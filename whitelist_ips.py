@@ -67,25 +67,28 @@ def get_db_restrictions(db):
 
 print(" -------- ")
 print("getting current ip restrictions")
-
-print(json.dumps(get_db_restrictions(db_to_update)))
+existing_ip_tables = get_db_restrictions(db_to_update)
+print(json.dumps(existing_ip_tables, indent=4))
 print(" -------- ")
 
 print("setting new ip restrictions")
+
+print(existing_ip_tables)
 
 with open('ip-ranges.json') as f:
     data = json.load(f)
     prefixes = data['prefixes']
     for ips in prefixes:
-        try:
-            result = client.post('/hosting/privateDatabase/' + db_to_update + '/whitelist', 
-                ip=ips['ip_prefix'],
-                name=ips['service'] + "-" + ips['region'],
-                service=True,
-                sftp=False,
-            )
-        except:
-            print(ips['service'] + "-" + ips['region'] + " already whitelisted")
+	if not ips['ip_prefix'] in existing_ip_tables:
+            try:
+                result = client.post('/hosting/privateDatabase/' + db_to_update + '/whitelist', 
+                    ip=ips['ip_prefix'],
+                    name=ips['service'] + "-" + ips['region'],
+                    service=True,
+                    sftp=False,
+                )
+            except:
+                print(ips['service'] + "-" + ips['region'] + " already whitelisted")
 
 print(" -------- ")
 print("getting new ip restrictions")
