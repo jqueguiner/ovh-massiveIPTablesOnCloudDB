@@ -60,7 +60,10 @@ def main():
     
 
     set_ip_restrictions("enterpriseDB", enterpriseDB_to_migrate_to, ip_to_whitelist = ip_restriction_cloudDB, existing_ips = ip_restriction_enterpriseDB)
-    dump_file = dump_db("cloudDB", cloudDB_to_migrate_from)
+
+    move_to_readonly = raw_input('Please the enterpriseDB database name to migrate to [Y]/n ? ')
+
+    dump_file = dump_db("cloudDB", cloudDB_to_migrate_from, move_to_readonly)
 
 
     print("setting users admin passwords to " + password)
@@ -274,7 +277,7 @@ def make_users_ro(db_type, db):
         print('not implemented yet')
 
 
-def dump_db(db_type, db):
+def dump_db(db_type, db, move_to_readonly):
     global db_name
     if db_type == "cloudDB" :
 
@@ -287,7 +290,8 @@ def dump_db(db_type, db):
         existing_dumps = client.get('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
             )
 
-        make_users_ro(db_type, db)
+        if lower(move_to_readonly) == 'y':
+            make_users_ro(db_type, db)
 
         try:
             client.post('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
@@ -403,7 +407,7 @@ def restore_db(dump_file, db, username, password, db_name):
 
         drop_question = raw_input('[N]/y ?')
 
-        if drop_question == 'y':
+        if lower(drop_question) == 'y':
             cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(
                 sql.Identifier(db_name))
                 )
