@@ -61,7 +61,7 @@ def main():
 
     set_ip_restrictions("enterpriseDB", enterpriseDB_to_migrate_to, ip_to_whitelist = ip_restriction_cloudDB, existing_ips = ip_restriction_enterpriseDB)
 
-    move_to_readonly = raw_input('Please the enterpriseDB database name to migrate to [Y]/n ? ')
+    move_to_readonly = raw_input('Do you want to move the original DB user to readonly before dump. [Y]/n ? ')
 
     dump_file = dump_db("cloudDB", cloudDB_to_migrate_from, move_to_readonly)
 
