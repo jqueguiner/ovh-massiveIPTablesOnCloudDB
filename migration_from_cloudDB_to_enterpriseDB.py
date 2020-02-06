@@ -47,7 +47,7 @@ def main():
     api_setup(args.config_file)
 
     cloudDB = get_available_db('cloudDB')
-    cloudDB_to_migrate_from = raw_input('Please the CloudDB database name to migrate from : ')
+    cloudDB_to_migrate_from = raw_input('Please the CloudDB service name to migrate from : ')
 
     enterpriseDB = get_available_db('enterpriseDB')
     enterpriseDB_to_migrate_to = raw_input('Please the enterpriseDB database name to migrate to : ')
@@ -265,7 +265,8 @@ def set_ip_restrictions(db_type, db, ip_to_whitelist = [], existing_ips = []):
 
 
 def make_users_ro(db_type, db):
-
+    global db_name
+    db_name = raw_input('Please input the DataBase to migrate : ')
     if db_type == "cloudDB" :
         users = client.get('/hosting/privateDatabase/' + db + '/user')
 
@@ -278,14 +279,12 @@ def make_users_ro(db_type, db):
 
 
 def dump_db(db_type, db, move_to_readonly):
-    global db_name
+    
     if db_type == "cloudDB" :
 
         db_list = client.get('/hosting/privateDatabase/' + db + '/database/')
 
         print(json.dumps(db_list, indent=4))
-
-        db_name = raw_input('Please input the DB to dump : ')
 
         existing_dumps = client.get('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
             )
