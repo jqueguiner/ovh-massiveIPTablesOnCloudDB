@@ -32,7 +32,6 @@ def main():
     db_name = ""
     password = randomStringDigits(12) + str(random_with_N_digits(2))
 
-
     response = requests.get('http://ifconfig.co/ip')
     my_ip = response.content.rstrip()
 
@@ -63,16 +62,18 @@ def main():
 
     move_to_readonly = raw_input('Do you want to move the original DB user to readonly before dump. [Y]/n ? ')
 
-    dump_file = dump_db("cloudDB", cloudDB_to_migrate_from, move_to_readonly)
+    get_db_list("cloudDB", cloudDB_to_migrate_from)
 
+    db_name = raw_input('Please input the DataBase to migrate : ')
 
+    dump_file = dump_db("cloudDB", cloudDB_to_migrate_from, db_name, move_to_readonly)
+
+    print("")
     print("setting users admin passwords to " + password)
 
     user = get_or_create_user_db("enterpriseDB", enterpriseDB_to_migrate_to, password)
     
-
     restore_db(dump_file, enterpriseDB_to_migrate_to, user['name'], password, db_name)
-
 
 
 def random_with_N_digits(n):
@@ -102,7 +103,6 @@ def api_setup(ovh_config_file):
     config = configparser.ConfigParser()
 
     config.read(ovh_config_file)
-
 
     if not 'application_key' in config[config['default']['endpoint']]:
         print("Please visit https://eu.api.ovh.com/createApp/ to create an API key")
@@ -142,12 +142,12 @@ def get_available_db(db_type):
     return result
 
 
-def get_ip_restrictions(db_type, db, get_ip_restrictions = ""):
+def get_ip_restrictions(db_type, service_name, get_ip_restrictions = ""):
     global security_group_to_update
 
     if db_type == "cloudDB":
         
-        existing_ip_tables = client.get('/hosting/privateDatabase/' + db + '/whitelist', 
+        existing_ip_tables = client.get('/hosting/privateDatabase/' + service_name + '/whitelist', 
                 service=True,
                 sftp=True,
             )
@@ -162,9 +162,8 @@ def get_ip_restrictions(db_type, db, get_ip_restrictions = ""):
         return existing_ip_tables
 
     else:
-        clusterId = db
 
-        security_groups = client.get('/cloudDB/enterprise/cluster/' + clusterId + '/securityGroup')
+        security_groups = client.get('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup')
 
         if not security_groups:
             print("setting up a new security group")
@@ -174,22 +173,21 @@ def get_ip_restrictions(db_type, db, get_ip_restrictions = ""):
                 security_group_to_create = random_name.generate_name()
                 print('empty security group name set we decided to create a random one : ' + security_group_to_create)
 
-            result = client.post('/cloudDB/enterprise/cluster/' + clusterId + '/securityGroup', 
-                clusterId=clusterId,
+            result = client.post('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup', 
+                clusterId=service_name,
                 name=security_group_to_create
                 )
 
-
         
-        security_groups = client.get('/cloudDB/enterprise/cluster/' + clusterId + '/securityGroup')
+        security_groups = client.get('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup')
  
         print(" -------- ")
-        print("getting current security Groups on Enterprise cloudDB")
+        print("Getting current security Groups on Enterprise cloudDB")
 
         security_group_by_name = dict()
 
         for security_group in security_groups:
-            security_group_details = client.get('/cloudDB/enterprise/cluster/' + clusterId + '/securityGroup/' + security_group)
+            security_group_details = client.get('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup/' + security_group)
             security_group_by_name[security_group_details['name']] = security_group_details['id']
         
         print(json.dumps(security_group_by_name, indent=4))
@@ -205,19 +203,19 @@ def get_ip_restrictions(db_type, db, get_ip_restrictions = ""):
         security_group = security_group_to_update
 
 
-        existing_rules = client.get('/cloudDB/enterprise/cluster/' + clusterId + '/securityGroup/' + security_group_to_update + '/rule')
+        existing_rules = client.get('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup/' + security_group_to_update + '/rule')
 
         existing_ip_tables = list()
 
         for rule in existing_rules:
-            existing_rules = client.get('/cloudDB/enterprise/cluster/' + clusterId + '/securityGroup/' + security_group_to_update + '/rule/' + rule)
+            existing_rules = client.get('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup/' + security_group_to_update + '/rule/' + rule)
             existing_ip_tables.append(existing_rules["source"])
 
 
         return existing_ip_tables
 
 
-def set_ip_restrictions(db_type, db, ip_to_whitelist = [], existing_ips = []):
+def set_ip_restrictions(db_type, service_name, ip_to_whitelist = [], existing_ips = []):
     print("")
     if db_type == "cloudDB" :
 
@@ -245,11 +243,11 @@ def set_ip_restrictions(db_type, db, ip_to_whitelist = [], existing_ips = []):
 
         for ip in ip_to_whitelist:
             if not ip in existing_ips:
-                print('/cloudDB/enterprise/cluster/' + db + '/securityGroup/' + security_group_to_update + '/rule')
+                print('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup/' + security_group_to_update + '/rule')
                 print(ip)
                 try:
 
-                    result = client.post('/cloudDB/enterprise/cluster/' + db + '/securityGroup/' + security_group_to_update + '/rule',
+                    result = client.post('/cloudDB/enterprise/cluster/' + service_name + '/securityGroup/' + security_group_to_update + '/rule',
                         source=ip,
                         )
                 except Exception as e:
@@ -259,41 +257,42 @@ def set_ip_restrictions(db_type, db, ip_to_whitelist = [], existing_ips = []):
                 print(ip + " already whitelisted")
 
         print(" -------- ")
-        print("getting new ip restrictions")
-
-        print(json.dumps(get_ip_restrictions(db_type, db, security_group_to_update)))  
 
 
-def make_users_ro(db_type, db):
-    global db_name
-    db_name = raw_input('Please input the DataBase to migrate : ')
+def make_users_ro(db_type, service_name, db_name):
+    
     if db_type == "cloudDB" :
-        users = client.get('/hosting/privateDatabase/' + db + '/user')
+        users = client.get('/hosting/privateDatabase/' + service_name + '/user')
 
-        for user in users:
-            client.post('/hosting/privateDatabase/' + db + '/user/' + user + '/grant/stats/update', 
+        for user in users:            
+            client.post('/hosting/privateDatabase/' + service_name + '/user/' + user + '/grant/' + db_name + '/update', 
                 grant='ro'
                 )
     else:
         print('not implemented yet')
 
 
-def dump_db(db_type, db, move_to_readonly):
+def get_db_list(db_type, service_name):
+    if db_type == "cloudDB" :
+        db_list = client.get('/hosting/privateDatabase/' + service_name + '/database/')
+
+        print(json.dumps(db_list, indent=4))
+    else:
+        print("not implemented yet")
+
+
+def dump_db(db_type, service_name, db_name, move_to_readonly):
     
     if db_type == "cloudDB" :
 
-        db_list = client.get('/hosting/privateDatabase/' + db + '/database/')
-
-        print(json.dumps(db_list, indent=4))
-
-        existing_dumps = client.get('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
+        existing_dumps = client.get('/hosting/privateDatabase/' + service_name + '/database/' + db_name + '/dump', 
             )
 
         if move_to_readonly.lower() == 'y':
-            make_users_ro(db_type, db)
+            make_users_ro(db_type, service_name)
 
         try:
-            client.post('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
+            client.post('/hosting/privateDatabase/' + service_name + '/database/' + db_name + '/dump', 
                 sendEmail=False
                 )
         except:
@@ -301,12 +300,11 @@ def dump_db(db_type, db, move_to_readonly):
 
         ready = False
 
-        
 
         while ready == False:
-            print("waiting for dump for " + db + " db : " + db_name)
+            print("waiting for dump for " + service_name + " db : " + db_name)
 
-            dumps = client.get('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
+            dumps = client.get('/hosting/privateDatabase/' + service_name + '/database/' + db_name + '/dump', 
                 )
 
             if existing_dumps[0] != dumps[0]:
@@ -319,11 +317,11 @@ def dump_db(db_type, db, move_to_readonly):
         print("dump ready : dump_id = " + str(dump_id))
 
         print("downloading dump : " + str(dump_id))
-        dl_dump = client.get('/hosting/privateDatabase/' + db + '/database/stats/dump/' + str(dump_id))
+        dl_dump = client.get('/hosting/privateDatabase/' + service_name + '/database/stats/dump/' + str(dump_id))
         
         print(dl_dump["url"])
 
-        dump_file =  "dump_" + db + "_" + str(dump_id) + '.gz'
+        dump_file =  "dump_" + service_name + "_" + str(dump_id) + '.gz'
 
         wget.download(dl_dump["url"], dump_file)
 
@@ -333,11 +331,11 @@ def dump_db(db_type, db, move_to_readonly):
         print("Not implemented yet")
 
 
-def get_or_create_user_db(db_type, db, password):
+def get_or_create_user_db(db_type, service_name, password):
 
     if db_type == "enterpriseDB":
 
-        user = client.post('/cloudDB/enterprise/cluster/' + db + '/user', 
+        user = client.post('/cloudDB/enterprise/cluster/' + service_name + '/user', 
             password=password
         )
         # time to wait for the new password to be taken into account
@@ -345,13 +343,13 @@ def get_or_create_user_db(db_type, db, password):
         
     return user
 
-def get_rw_endpoint(db):
-    endpoints = client.get('/cloudDB/enterprise/cluster/' + db + '/endpoint')
+def get_rw_endpoint(service_name):
+    endpoints = client.get('/cloudDB/enterprise/cluster/' + service_name + '/endpoint')
     fqdn = ""
     port = 0
 
     for endpoint in endpoints:
-        ep = client.get('/cloudDB/enterprise/cluster/' + db + '/endpoint/' + endpoint)
+        ep = client.get('/cloudDB/enterprise/cluster/' + service_name + '/endpoint/' + endpoint)
         if ep['name'] == "read-write":
             fqdn = ep['fqdn']
             port = ep['port']
@@ -362,9 +360,9 @@ def get_rw_endpoint(db):
     return fqdn, port
 
 
-def restore_db(dump_file, db, username, password, db_name):
+def restore_db(dump_file, service_name, username, password, db_name):
 
-    fqdn, port = get_rw_endpoint(db)
+    fqdn, port = get_rw_endpoint(service_name)
 
     print("password : " + password)
 
@@ -406,7 +404,7 @@ def restore_db(dump_file, db, username, password, db_name):
 
         drop_question = raw_input('[N]/y ?')
 
-        if lower(drop_question) == 'y':
+        if drop_question.lower() == 'y':
             cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(
                 sql.Identifier(db_name))
                 )
@@ -464,26 +462,20 @@ def restore_db(dump_file, db, username, password, db_name):
             cursor.execute("SELECT * FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';")
 
             print("--------------------------------")
-            print(" ALL TABLE IN %s ") % (db)
+            print(" ALL TABLES IN %s ") % (db)
             print(cursor.fetchall())
             print("--------------------------------")
             cursor.execute("SELECT schemaname,relname,n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC;")
             print("--------------------------------")
             lines = cursor.fetchall()
             print(lines)
-            
-            print("We found %s Lines in %s" % (lines[2], lines[1]))
-            print("--------------------------------")
+            for line in lines:
+                print("We found %s Lines in %s.%s" % (line[2], db, line[1]))
+                print("--------------------------------")
             con.close()
             
         except:
             print("error while retrieving tables for DB: " + db)
-        
-
-
-
-
-    
 
 
 main() 
