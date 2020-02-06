@@ -24,6 +24,9 @@ from random import randint
 import operator
 import gzip
 
+import argparse
+
+
 
 
 def main():
@@ -73,7 +76,9 @@ def main():
 
     user = get_or_create_user_db("enterpriseDB", enterpriseDB_to_migrate_to, password)
     
-    restore_db(dump_file, enterpriseDB_to_migrate_to, user['name'], password, db_name)
+    target_db_name = raw_input('What is the target DB Name. [%s]/Custom ? ' % db_name) or db_name
+
+    restore_db(dump_file, enterpriseDB_to_migrate_to, user['name'], password, target_db_name)
 
 
 def random_with_N_digits(n):
