@@ -270,7 +270,7 @@ def make_users_ro(db_type, db):
         users = client.get('/hosting/privateDatabase/' + db + '/user')
 
         for user in users:
-            client.post('/hosting/privateDatabase/' + db + '/user/mi/grant/stats/update', 
+            client.post('/hosting/privateDatabase/' + db + '/user/' + user + '/grant/stats/update', 
                 grant='ro'
                 )
     else:
