@@ -290,7 +290,7 @@ def dump_db(db_type, db, move_to_readonly):
         existing_dumps = client.get('/hosting/privateDatabase/' + db + '/database/' + db_name + '/dump', 
             )
 
-        if lower(move_to_readonly) == 'y':
+        if move_to_readonly.lower() == 'y':
             make_users_ro(db_type, db)
 
         try:
